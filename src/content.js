@@ -1,5 +1,102 @@
 // Content script for ClinicalKey Helper
 let isEnabled = false;
+let bookContentLinks = [];
+let journalPdfLinks = [];
+
+// Function to scan the page for book content links
+function scanPageForBookLinks() {
+  bookContentLinks = [];
+  const links = document.querySelectorAll('a');
+  
+  links.forEach(link => {
+    const href = link.href;
+    if (href && href.match(/^https:\/\/www\.clinicalkey\.com\/#!\/content\/book\/[\w.-]+/)) {
+      // Get the link text or use the URL if no text is available
+      const linkText = link.textContent.trim() || href;
+      
+      // Add to our collection if not already present
+      if (!bookContentLinks.some(item => item.url === href)) {
+        bookContentLinks.push({
+          url: href,
+          title: linkText
+        });
+      }
+    }
+  });
+  
+  return bookContentLinks;
+}
+
+// Function to scan the page for journal PDF links
+function scanPageForJournalLinks() {
+  journalPdfLinks = [];
+  
+  // First try to find direct PDF links
+  const directLinks = document.querySelectorAll('a[href*="/service/content/pdf/watermarked/"][href*=".pdf"]');
+  directLinks.forEach(link => {
+    const href = link.href;
+    let linkText = link.textContent.trim();
+    
+    // If no text, try to extract a meaningful name from the URL
+    if (!linkText) {
+      const urlParts = href.split('/');
+      const pdfName = urlParts[urlParts.length - 1].split('?')[0]; // Remove query params
+      linkText = `Article: ${pdfName}`;
+    }
+    
+    // Add to our collection if not already present
+    if (!journalPdfLinks.some(item => item.url === href)) {
+      journalPdfLinks.push({
+        url: href,
+        title: linkText
+      });
+    }
+  });
+  
+  // If no direct PDF links found, look for article links that might have PDF versions
+  if (journalPdfLinks.length === 0) {
+    // Look for article links in the journal TOC
+    const articleLinks = document.querySelectorAll('a[href*="/content/journal/"]');
+    articleLinks.forEach(link => {
+      const href = link.href;
+      const linkText = link.textContent.trim() || 'Article';
+      
+      // Extract article ID from the URL
+      const articleIdMatch = href.match(/\/content\/journal\/(\d+-s\d+\.\d+-[\w\d-]+)/);
+      if (articleIdMatch && articleIdMatch[1]) {
+        const articleId = articleIdMatch[1];
+        const pdfUrl = `https://www.clinicalkey.com/service/content/pdf/watermarked/${articleId}.pdf`;
+        
+        // Add to our collection if not already present
+        if (!journalPdfLinks.some(item => item.url === pdfUrl)) {
+          journalPdfLinks.push({
+            url: pdfUrl,
+            title: linkText
+          });
+        }
+      }
+    });
+  }
+  
+  // Also look for any links that might contain PDF URLs
+  const allLinks = document.querySelectorAll('a');
+  allLinks.forEach(link => {
+    const href = link.href;
+    if (href && href.includes('/pdf/') && href.includes('.pdf')) {
+      const linkText = link.textContent.trim() || 'PDF Article';
+      
+      // Add to our collection if not already present
+      if (!journalPdfLinks.some(item => item.url === href)) {
+        journalPdfLinks.push({
+          url: href,
+          title: linkText
+        });
+      }
+    }
+  });
+  
+  return journalPdfLinks;
+}
 
 // Initialize the extension
 function initializeHelper() {
@@ -40,7 +137,7 @@ function setupHelperUI() {
   document.body.appendChild(fab);
   
   // Add click event to the FAB
-  fab.addEventListener('click', toggleHelperPanel);
+  fab.addEventListener('click', toggleHelperPanel, { passive: true });
 }
 
 // Toggle the helper panel
@@ -165,7 +262,7 @@ function toggleHelperPanel() {
   // Add close button event
   document.getElementById('ck-helper-close').addEventListener('click', () => {
     panel.remove();
-  });
+  }, { passive: true });
   
   // Add click events for shortcut links
   panel.querySelectorAll('.ck-helper-shortcuts a').forEach(link => {
@@ -173,7 +270,7 @@ function toggleHelperPanel() {
       e.preventDefault();
       const action = link.getAttribute('data-action');
       handleShortcutAction(action);
-    });
+    }, { passive: false }); // Cannot be passive since we're calling preventDefault
   });
 }
 
@@ -215,6 +312,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     
     sendResponse({ success: true });
+  }
+  
+  if (message.action === 'scanForBookLinks') {
+    const links = scanPageForBookLinks();
+    sendResponse({ success: true, links: links });
+    return true; // Required for async sendResponse
+  }
+  
+  if (message.action === 'scanForJournalLinks') {
+    const links = scanPageForJournalLinks();
+    sendResponse({ success: true, links: links });
+    return true; // Required for async sendResponse
   }
 });
 
