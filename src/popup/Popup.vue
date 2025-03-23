@@ -5,12 +5,23 @@
     </header>
     <main class="content">
       <div class="card">
-        <h2>Features</h2>
-        <ul>
-          <li v-for="(feature, index) in features" :key="index">
-            {{ feature }}
-          </li>
-        </ul>
+        <div v-if="urlChecked" class="url-status">
+          <div v-if="isUrlMatch && urlType === 'content'" class="match-message">
+            <span class="status-icon">✓</span>
+            <span>Will insert</span>
+          </div>
+          <div v-else-if="isUrlMatch && urlType === 'browse'" class="browse-message">
+            <span class="status-icon">ℹ</span>
+            <span>Book Contents Page</span>
+          </div>
+          <div v-else class="no-match-message">
+            <span class="status-icon">✗</span>
+            <span>No match</span>
+          </div>
+        </div>
+        <div v-else class="checking-message">
+          <span>Checking URL...</span>
+        </div>
       </div>
       <div class="actions">
         <button @click="toggleFeature" class="btn primary">
@@ -30,11 +41,10 @@ export default {
   data() {
     return {
       isEnabled: false,
-      features: [
-        'Quick access to clinical resources',
-        'Simplified search interface',
-        'Customizable shortcuts'
-      ]
+      urlChecked: false,
+      isUrlMatch: false,
+      urlType: null,
+      currentUrl: ''
     }
   },
   mounted() {
@@ -42,8 +52,32 @@ export default {
     chrome.storage.sync.get(['enabled'], (result) => {
       this.isEnabled = result.enabled || false;
     });
+    
+    // Get the current tab URL and check if it matches the pattern
+    this.checkCurrentUrl();
   },
   methods: {
+    checkCurrentUrl() {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs && tabs[0] && tabs[0].url) {
+          this.currentUrl = tabs[0].url;
+          
+          // Send message to background script to check URL
+          chrome.runtime.sendMessage(
+            { action: 'checkUrl', url: this.currentUrl },
+            (response) => {
+              this.isUrlMatch = response.isMatch;
+              this.urlType = response.type;
+              this.urlChecked = true;
+            }
+          );
+        } else {
+          this.urlChecked = true;
+          this.isUrlMatch = false;
+          this.urlType = null;
+        }
+      });
+    },
     toggleFeature() {
       this.isEnabled = !this.isEnabled;
       chrome.storage.sync.set({ enabled: this.isEnabled });
@@ -101,13 +135,49 @@ export default {
   color: #2c3e50;
 }
 
-ul {
-  padding-left: 20px;
+.url-status {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  text-align: center;
 }
 
-li {
+.match-message, .no-match-message, .browse-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 18px;
+  font-weight: 500;
+  padding: 12px;
+  border-radius: 8px;
+  width: 100%;
+}
+
+.match-message {
+  color: #27ae60;
+  background-color: rgba(39, 174, 96, 0.1);
+}
+
+.no-match-message {
+  color: #e74c3c;
+  background-color: rgba(231, 76, 60, 0.1);
+}
+
+.browse-message {
+  color: #3498db;
+  background-color: rgba(52, 152, 219, 0.1);
+}
+
+.status-icon {
+  font-size: 32px;
   margin-bottom: 8px;
-  color: #34495e;
+}
+
+.checking-message {
+  text-align: center;
+  color: #7f8c8d;
+  padding: 16px;
 }
 
 .actions {

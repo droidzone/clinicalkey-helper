@@ -3,7 +3,7 @@
   "name": "ClinicalKey Helper",
   "version": "1.0.0",
   "description": "A Chrome extension built with Vue.js",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "tabs"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
