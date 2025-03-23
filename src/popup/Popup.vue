@@ -105,30 +105,95 @@ export default {
   methods: {
     checkCurrentUrl() {
       console.log(`Checking current URL...`);
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs && tabs[0] && tabs[0].url) {
-          this.currentUrl = tabs[0].url;
-          this.currentPageTitle = tabs[0].title || '';
-          
-          console.log('Current URL:', this.currentUrl);
-          
-          // Local URL matching logic
-          this.checkUrlMatchLocally(this.currentUrl);
-        } else {
-          this.urlChecked = true;
-          this.isUrlMatch = false;
-          this.urlType = null;
-        }
-      });
+      try {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          console.log('Tab query result:', tabs);
+          if (tabs && tabs[0] && tabs[0].url) {
+            this.currentUrl = tabs[0].url;
+            this.currentPageTitle = tabs[0].title || '';
+            
+            console.log('Current URL:', this.currentUrl);
+
+            // ULTRA SIMPLE CHECKS - direct string comparison for specific URL patterns
+            // Journal TOC URL check
+            if (this.currentUrl.includes('clinicalkey.com') && 
+                this.currentUrl.includes('toc') && 
+                this.currentUrl.includes('journalIssue')) {
+              
+              console.log('JOURNAL URL DETECTED!');
+              this.isUrlMatch = true;
+              this.urlType = 'journal';
+              this.urlChecked = true;
+              this.scanForLinks();
+              return;
+            }
+            
+            // Book Browse URL check
+            if (this.currentUrl.includes('clinicalkey.com') && 
+                this.currentUrl.includes('/browse/book/')) {
+              
+              console.log('BOOK BROWSE URL DETECTED!');
+              this.isUrlMatch = true;
+              this.urlType = 'browse';
+              this.urlChecked = true;
+              this.scanForLinks();
+              return;
+            }
+            
+            // Book Content URL check
+            if (this.currentUrl.includes('clinicalkey.com') && 
+                this.currentUrl.includes('/content/book/')) {
+              
+              console.log('BOOK CONTENT URL DETECTED!');
+              this.isUrlMatch = true;
+              this.urlType = 'content';
+              this.urlChecked = true;
+              return;
+            }
+            
+            // Local URL matching logic as fallback
+            this.checkUrlMatchLocally(this.currentUrl);
+          } else {
+            console.log('No active tab or URL found');
+            this.urlChecked = true;
+            this.isUrlMatch = false;
+            this.urlType = null;
+          }
+        });
+      } catch (err) {
+        console.error('Error in checkCurrentUrl:', err);
+      }
     },
     
     checkUrlMatchLocally(url) {
       console.log('Checking URL locally:', url);
       
+      // DEBUG: Log the URL parts separately
+      console.log('URL includes check results:', {
+        "clinicalkey.com": url.includes('clinicalkey.com'),
+        "#!/browse/toc/": url.includes('#!/browse/toc/'), 
+        "/browse/toc/": url.includes('/browse/toc/'),
+        "journalIssue": url.includes('journalIssue'),
+        "indexOf check": url.indexOf('clinicalkey.com/#!/browse/toc/') !== -1,
+        "raw URL": url
+      });
+      
+      // Very broad checks for journal TOC URL - try multiple approaches
+      if (url.includes('clinicalkey') && url.includes('toc') && url.includes('journal')) {
+        console.log('Journal TOC URL match found via broad terms!');
+        this.isUrlMatch = true;
+        this.urlType = 'journal';
+        this.urlChecked = true;
+        
+        // Automatically scan for journal links
+        this.scanForLinks();
+        return;
+      }
+      
       // Direct check for the problematic journal URL
       if (url.indexOf('clinicalkey.com/#!/browse/toc/') !== -1 || 
-          url.includes('/browse/toc/') && url.includes('/journalIssue')) {
-        console.log('Journal TOC URL match found!');
+          (url.includes('/browse/toc/') && url.includes('/journalIssue'))) {
+        console.log('Journal TOC URL match found via specific pattern!');
         this.isUrlMatch = true;
         this.urlType = 'journal';
         this.urlChecked = true;
