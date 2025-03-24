@@ -1,6 +1,6 @@
 # ClinicalKey Helper Chrome Extension
 
-A Chrome extension built with Vue.js to enhance the ClinicalKey experience.
+A Chrome extension built with Vue.js to enhance the ClinicalKey experience for paid subscribers. This is not a tool to download files without a subscription. You need to have an active subscription. If you do, this extension will help you download PDFs of content you have access to.
 
 ## Features
 

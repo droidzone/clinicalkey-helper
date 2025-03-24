@@ -2,11 +2,45 @@
 let isEnabled = false;
 let bookContentLinks = [];
 let journalPdfLinks = [];
+let bookTitle = "";
+
+// Function to extract book title from the page
+function extractBookTitle() {
+  // Try to find the book title in the h1 element
+  const titleElement = document.querySelector('h1.ng-binding');
+  if (titleElement) {
+    // Extract text and clean it up
+    bookTitle = titleElement.textContent.trim()
+      // Remove any angular comments
+      .replace(/<!--[\s\S]*?-->/g, '')
+      // Clean up any extra whitespace
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    console.log('Found book title:', bookTitle);
+    return bookTitle;
+  }
+  
+  // Fallback: Try other potential title elements
+  const altTitleElement = document.querySelector('.book-title') || 
+                          document.querySelector('.publication-title');
+  if (altTitleElement) {
+    bookTitle = altTitleElement.textContent.trim();
+    console.log('Found alternate book title:', bookTitle);
+    return bookTitle;
+  }
+  
+  console.log('No book title found on page');
+  return "";
+}
 
 // Function to scan the page for book content links
 function scanPageForBookLinks() {
   bookContentLinks = [];
   const links = document.querySelectorAll('a');
+  
+  // Extract book title first
+  extractBookTitle();
   
   links.forEach(link => {
     const href = link.href;
@@ -14,11 +48,32 @@ function scanPageForBookLinks() {
       // Get the link text or use the URL if no text is available
       const linkText = link.textContent.trim() || href;
       
+      // Extract chapter number if available
+      let chapterNumber = '';
+      const chapterNumberSpan = link.querySelector('.chapter-number span');
+      if (chapterNumberSpan) {
+        chapterNumber = chapterNumberSpan.textContent.trim();
+      }
+      
+      // Extract chapter title if available
+      let chapterTitle = '';
+      const titleSpan = link.querySelector('[data-once-text="chapter.itemtitle"]');
+      if (titleSpan) {
+        chapterTitle = titleSpan.textContent.trim();
+      } else {
+        // If no specific title span, use the link text but try to remove the number prefix
+        chapterTitle = linkText.replace(/^\d+\.\s*/, '').trim();
+      }
+      
+      console.log('Found book link:', { href, chapterNumber, chapterTitle });
+      
       // Add to our collection if not already present
       if (!bookContentLinks.some(item => item.url === href)) {
         bookContentLinks.push({
           url: href,
-          title: linkText
+          title: linkText,
+          chapterNumber: chapterNumber,
+          chapterTitle: chapterTitle
         });
       }
     }
@@ -316,7 +371,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   if (message.action === 'scanForBookLinks') {
     const links = scanPageForBookLinks();
-    sendResponse({ success: true, links: links });
+    // Make sure we include the extracted book title in the response
+    sendResponse({ success: true, links: links, bookTitle: bookTitle });
     return true; // Required for async sendResponse
   }
   

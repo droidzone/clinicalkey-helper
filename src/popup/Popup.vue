@@ -1,7 +1,14 @@
 <template>
-  <div class="popup-container">
+  <div class="popup-container" :class="{ 'dark-mode': isDarkMode }">
     <header class="header">
       <h1>ClinicalKey Helper</h1>
+      <button @click="showSettings = true" class="settings-btn" title="Settings">
+        <!-- Gear icon SVG -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
     </header>
     <main class="content">
       <div class="card">
@@ -29,12 +36,41 @@
             
             <div v-if="bookLinks.length > 0" class="link-list">
               <div class="list-header">
-                <h3>Available Content Links</h3>
                 <button @click="downloadAllPdfs" class="btn download-all-btn" v-if="bookLinks.length > 1">
-                  Download All PDFs ({{ bookLinks.length }})
+                  Download All({{ bookLinks.length }})
+                </button>
+                <button @click="downloadRenamerScript" class="btn download-renamer-btn" style="margin-top: 8px; background-color: #34A853;">
+                  Download Script
                 </button>
               </div>
               <ul>
+                <li>
+                  <div class="list-footer" v-if="bookLinks.length > 1">
+               
+                
+                <!-- Batch download buttons when there are more than batchSize links -->
+                <div class="batch-buttons" v-if="bookLinks.length > batchSize && showBatchButtons" style="margin-top: 8px;">
+                  <div class="batch-buttons-header" style="font-weight: bold; margin-bottom: 5px;">Download in batches:</div>
+                  <div class="batch-buttons-container" style="display: flex; flex-wrap: wrap; gap: 5px;">
+                    <button 
+                      v-for="(_, index) in Math.ceil(bookLinks.length / batchSize)" 
+                      :key="index"
+                      @click="downloadBatch(index * batchSize, Math.min((index + 1) * batchSize, bookLinks.length))"
+                      class="btn batch-btn"
+                      :style="{
+                        backgroundColor: downloadedBatches.includes(index) ? '#34A853' : '#4285F4',
+                        padding: '5px 10px', 
+                        fontSize: '14px'
+                      }"
+                    >
+                      {{ index * batchSize + 1 }}-{{ Math.min((index + 1) * batchSize, bookLinks.length) }}
+                    </button>
+                  </div>
+                </div>
+                
+                
+              </div>
+                </li>
                 <li v-for="(link, index) in bookLinks" :key="index" class="link-item">
                   <div class="link-title">{{ link.title }}</div>
                   <button @click="downloadContent(link.url)" class="btn download-btn" title="Download content">
@@ -45,15 +81,33 @@
                     </svg>
                   </button>
                 </li>
-              </ul>
-              <div class="list-footer" v-if="bookLinks.length > 1">
-                <button @click="downloadAllPdfs" class="btn download-all-btn">
-                  Download All PDFs ({{ bookLinks.length }})
+                <li>  
+                  <button @click="downloadAllPdfs" class="btn download-all-btn">
+                  Download All({{ bookLinks.length }})
                 </button>
-              </div>
+                <button @click="downloadRenamerScript" class="btn download-renamer-btn" style="margin-top: 8px; background-color: #34A853;">
+                  Download Renamer Script
+                </button>
+ </li>
+
+              </ul>
+              
+              
             </div>
             <div v-else-if="hasScanned && bookLinks.length === 0" class="no-links-message">
-              No content links found on this page.
+              <div v-if="!isRefreshing">
+                No content links found on this page.
+                <button @click="refreshPageAndScan" class="btn primary" style="margin-top: 10px;">
+                  <span class="icon">🔄</span> Refresh Page
+                </button>
+              </div>
+              <div v-else class="refresh-progress-container">
+                <div>Refreshing page and scanning for links...</div>
+                <div class="progress-bar-container" style="margin: 10px 0;">
+                  <div class="progress-bar" :style="{ width: refreshProgress + '%' }"></div>
+                </div>
+                <div>{{ Math.round(refreshProgress) }}%</div>
+              </div>
             </div>
           </div>
           <div v-else class="no-match-message">
@@ -75,11 +129,19 @@
       <p>Version 1.0.0</p>
     </footer>
   </div>
+  <!-- Settings Panel -->
+  <Settings v-if="showSettings" @close="closeSettings" />
 </template>
 
 <script>
+import Settings from './Settings.vue';
+import { useSettingsStore } from '../store/settingsStore';
+
 export default {
   name: 'Popup',
+  components: {
+    Settings
+  },
   data() {
     return {
       isEnabled: false,
@@ -90,10 +152,27 @@ export default {
       currentPageTitle: '',
       bookLinks: [],
       isScanning: false,
-      hasScanned: false
+      hasScanned: false,
+      bookTitle: '',
+      downloadedBatches: [], // Track which batches have been downloaded
+      showSettings: false, // Control settings panel visibility
+      isDarkMode: false, // Track dark mode state
+      batchSize: 10, // Default batch size, will be updated from settings
+      showBatchButtons: true, // Default value for showing batch buttons
+      isRefreshing: false, // Track if page is refreshing
+      refreshProgress: 0 // Track refresh progress percentage
     }
   },
   mounted() {
+    // Load settings from store
+    const settingsStore = useSettingsStore();
+    settingsStore.loadSettings().then(() => {
+      // Apply settings
+      this.isDarkMode = settingsStore.darkMode;
+      this.batchSize = settingsStore.batchSize;
+      this.showBatchButtons = settingsStore.showBatchButtons;
+    });
+    
     // Check if the extension is enabled
     chrome.storage.sync.get(['enabled'], (result) => {
       this.isEnabled = result.enabled || false;
@@ -103,6 +182,22 @@ export default {
     this.checkCurrentUrl();
   },
   methods: {
+    closeSettings() {
+      this.showSettings = false;
+      
+      // Refresh settings from store
+      const settingsStore = useSettingsStore();
+      
+      // Update settings from store
+      this.isDarkMode = settingsStore.darkMode;
+      this.showBatchButtons = settingsStore.showBatchButtons;
+      
+      // Update batch size and reset downloaded batches if batch size changed
+      if (this.batchSize !== settingsStore.batchSize) {
+        this.batchSize = settingsStore.batchSize;
+        this.downloadedBatches = []; // Reset downloaded batches when batch size changes
+      }
+    },
     checkCurrentUrl() {
       console.log(`Checking current URL...`);
       try {
@@ -238,9 +333,13 @@ export default {
       this.hasScanned = true;
       this.bookLinks = [];
       
+      console.log('Starting link scan for URL type:', this.urlType);
+      
       // Send message to content script to scan for book links or journal PDF links
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const action = this.urlType === 'journal' ? 'scanForJournalLinks' : 'scanForBookLinks';
+        
+        console.log('Sending message to content script:', action);
         
         chrome.tabs.sendMessage(
           tabs[0].id, 
@@ -248,6 +347,23 @@ export default {
           (response) => {
             if (response && response.success) {
               this.bookLinks = response.links;
+              
+              // Save the book title if it's provided in the response
+              if (response.bookTitle) {
+                this.bookTitle = response.bookTitle;
+                console.log('Received book title from content script:', this.bookTitle);
+              }
+              
+              console.log('Received links:', JSON.stringify(this.bookLinks, null, 2));
+              
+              // Check if links have chapter info
+              if (this.bookLinks.length > 0) {
+                console.log('First link sample:', this.bookLinks[0]);
+                const hasChapterInfo = this.bookLinks.some(link => link.chapterNumber || link.chapterTitle);
+                console.log('Links have chapter info?', hasChapterInfo);
+              }
+            } else {
+              console.error('Error in response:', response);
             }
             this.isScanning = false;
           }
@@ -325,46 +441,147 @@ export default {
       this.addToHistory(url, pdfUrl, this.currentPageTitle || 'Current Page');
     },
     
+    downloadBatch(startIndex, endIndex) {
+      console.log(`Starting batch download of PDFs from ${startIndex+1} to ${endIndex}`);
+      
+      // Get the subset of links for this batch
+      const batchLinks = this.bookLinks.slice(startIndex, endIndex);
+      console.log(`Downloading batch of ${batchLinks.length} PDFs`);
+      
+      // Mark this batch as downloaded
+      const batchIndex = Math.floor(startIndex / this.batchSize);
+      if (!this.downloadedBatches.includes(batchIndex)) {
+        this.downloadedBatches.push(batchIndex);
+      }
+      
+      // Loop through the batch links and download each PDF
+      batchLinks.forEach((link, index) => {
+        this.downloadSinglePdf(link, startIndex + index);
+      });
+    },
+    
     downloadAllPdfs() {
+      console.log('Starting batch download of PDFs');
+      console.log('Book links data:', JSON.stringify(this.bookLinks, null, 2));
+      
       // Loop through all links and download each PDF
       this.bookLinks.forEach((link, index) => {
-        const url = link.url;
-        // Check if this is already a direct PDF link (journal article)
-        const isPdfLink = url.includes('/service/content/pdf/watermarked/') && url.includes('.pdf');
-        let pdfUrl = url;
-        let filename = `clinicalkey-content-${index + 1}.pdf`;
-        
-        if (!isPdfLink) {
-          // Transform book content URL to direct PDF link
-          const contentIdMatch = url.match(/\/content\/book\/(3-s2\.0-[\w\d-]+)/);
-          
-          if (contentIdMatch && contentIdMatch[1]) {
-            const contentId = contentIdMatch[1];
-            pdfUrl = `https://www.clinicalkey.com/service/content/pdf/watermarked/${contentId}.pdf`;
-            filename = `${contentId}.pdf`;
-          }
-        } else {
-          // For direct PDF links, extract the filename from the URL
-          const urlParts = url.split('/');
-          filename = urlParts[urlParts.length - 1].split('?')[0]; // Remove query params
-        }
-        
-        // Create a safe filename from the title if available
-        if (link.title && link.title !== 'Unknown') {
-          const safeTitle = link.title.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').substring(0, 100);
-          filename = `${safeTitle}.pdf`;
-        }
-        
-        // Use the downloads API to force download the PDF
-        chrome.downloads.download({
-          url: pdfUrl,
-          filename: filename,
-          saveAs: false
-        });
-        
-        // Add to download history
-        this.addToHistory(url, pdfUrl, link.title);
+        this.downloadSinglePdf(link, index);
       });
+    },
+    
+    refreshPageAndScan() {
+      console.log('Refreshing page and scanning for links...');
+      
+      // Reset state
+      this.bookLinks = [];
+      this.hasScanned = false;
+      this.isScanning = true;
+      this.isRefreshing = true; // Set refreshing state for progress indicator
+      this.refreshProgress = 0; // Initialize progress at 0%
+      
+      // Get the refresh wait time from settings (in seconds)
+      const settingsStore = useSettingsStore();
+      const waitTimeInSeconds = settingsStore.refreshWaitTime;
+      
+      // Reload the current page
+      chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        const currentTab = tabs[0];
+        chrome.tabs.reload(currentTab.id, {}, () => {
+          // Update progress over the configured wait time
+          const totalWaitTime = waitTimeInSeconds * 1000; // Convert to milliseconds
+          const updateInterval = 100; // Update every 100ms
+          const progressIncrement = (updateInterval / totalWaitTime) * 100;
+          
+          const progressTimer = setInterval(() => {
+            this.refreshProgress += progressIncrement;
+            if (this.refreshProgress >= 100) {
+              clearInterval(progressTimer);
+              this.refreshProgress = 100;
+              this.isRefreshing = false;
+              
+              // Reset URL check to force a new check
+              this.urlChecked = false;
+              this.checkCurrentUrl();
+            }
+          }, updateInterval);
+        });
+      });
+    },
+    
+    downloadSinglePdf(link, index) {
+      console.log(`Processing link ${index}:`, link);
+      
+      const url = link.url;
+      // Check if this is already a direct PDF link (journal article)
+      const isPdfLink = url.includes('/service/content/pdf/watermarked/') && url.includes('.pdf');
+      let pdfUrl = url;
+      let filename = `clinicalkey-content-${index + 1}.pdf`;
+      
+      if (!isPdfLink) {
+        // Transform book content URL to direct PDF link
+        const contentIdMatch = url.match(/\/#!\/content\/book\/(3-s2\.0-[\w\d-]+)/) || 
+                             url.match(/\/content\/book\/(3-s2\.0-[\w\d-]+)/);
+        
+        if (contentIdMatch && contentIdMatch[1]) {
+          const contentId = contentIdMatch[1];
+          pdfUrl = `https://www.clinicalkey.com/service/content/pdf/watermarked/${contentId}.pdf`;
+          
+          console.log('Extracted content ID:', contentId);
+          console.log('Chapter data:', { 
+            number: link.chapterNumber, 
+            title: link.chapterTitle,
+            originalTitle: link.title 
+          });
+          
+          // Create a custom filename using chapter number and title
+          if (link.chapterNumber && link.chapterTitle) {
+            // Use chapter number and title
+            const safeTitle = link.chapterTitle.replace(/[<>:\\/"\|\?\*]/g, '_').replace(/\s+/g, ' ').trim();
+            filename = `${link.chapterNumber}. ${safeTitle}.pdf`;
+            console.log(`Creating custom filename with number and title: ${filename}`);
+          } else if (link.title) {
+            // Try to extract chapter number and title from the link text
+            const titleMatch = link.title.match(/^(\d+)\.(.*)/); 
+            if (titleMatch) {
+              const num = titleMatch[1];
+              const title = titleMatch[2].trim();
+              const safeTitle = title.replace(/[<>:\\/"\|\?\*]/g, '_').replace(/\s+/g, ' ').trim();
+              filename = `${num}. ${safeTitle}.pdf`;
+              console.log(`Created filename from link text: ${filename}`);
+            } else {
+              // Just use the title if no chapter number pattern found
+              const safeTitle = link.title.replace(/[<>:\\/"\|\?\*]/g, '_').replace(/\s+/g, ' ').trim();
+              filename = `${safeTitle}.pdf`;
+              console.log(`Created filename from title only: ${filename}`);
+            }
+          } else {
+            // Fallback to content ID
+            filename = `${contentId}.pdf`;
+            console.log(`Using fallback filename: ${filename}`);
+          }
+        }
+      } else {
+        // For direct PDF links, extract the filename from the URL
+        const urlParts = url.split('/');
+        filename = urlParts[urlParts.length - 1].split('?')[0]; // Remove query params
+      }
+      
+      // Create a safe filename from the title if available
+      if (link.title && link.title !== 'Unknown') {
+        const safeTitle = link.title.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_').substring(0, 100);
+        filename = `${safeTitle}.pdf`;
+      }
+      
+      // Use the downloads API to force download the PDF
+      chrome.downloads.download({
+        url: pdfUrl,
+        filename: filename,
+        saveAs: false
+      });
+      
+      // Add to download history
+      this.addToHistory(url, pdfUrl, link.title);
     },
     
     // Helper method to add downloads to history
@@ -404,7 +621,153 @@ export default {
           enabled: this.isEnabled
         });
       });
-    }
+    },
+    
+    downloadRenamerScript() {
+      console.log('BUTTON CLICKED - Downloading renamer script for', this.bookLinks.length, 'files');
+      
+      // Only continue if we have links to process
+      if (this.bookLinks.length === 0) {
+        alert('No links found to generate renamer script. Please scan for links first.');
+        return;
+      }
+      
+      // Create script header with comments
+      let scriptContent = "#!/bin/bash\n\n";
+      scriptContent += "# ClinicalKey PDF Renamer Script\n";
+      scriptContent += "# Generated: " + new Date().toLocaleString() + "\n";
+      scriptContent += "# This script renames downloaded PDF files and organizes them into a folder\n\n";
+      
+      // Add color variables for better output
+      scriptContent += "# Color definitions for output\n";
+      scriptContent += "GREEN=\"\\033[0;32m\"\n";
+      scriptContent += "RED=\"\\033[0;31m\"\n";
+      scriptContent += "YELLOW=\"\\033[0;33m\"\n";
+      scriptContent += "NC=\"\\033[0m\" # No Color\n\n";
+      
+      // Ensure variables are exported so they're properly defined
+      scriptContent += "export GREEN RED YELLOW NC\n\n";
+      
+      // Add counter variables and array for missing files
+      scriptContent += "# Counters for summary\n";
+      scriptContent += "TOTAL=0\n";
+      scriptContent += "SUCCESS=0\n";
+      scriptContent += "MISSING=0\n";
+      scriptContent += "MISSING_FILES=()\n\n";
+      
+      // Create folder for the book
+      const safeFolderName = this.bookTitle 
+        ? this.bookTitle.replace(/[\/<>:\\"|?*]/g, '_').trim() 
+        : "ClinicalKey_Downloads";
+        
+      scriptContent += "# Create folder for the book\n";
+      scriptContent += `BOOK_FOLDER="${safeFolderName}"\n`;
+      scriptContent += "mkdir -p \"$BOOK_FOLDER\"\n";
+      scriptContent += "echo \"Creating folder: $BOOK_FOLDER\"\n\n";
+      
+      scriptContent += "echo \"Starting PDF renaming process...\"\n\n";
+      
+      // Process each link to create renaming commands
+      this.bookLinks.forEach(link => {
+        const url = link.url;
+        
+        // Extract content ID from URL to match the downloaded filename
+        const contentIdMatch = url.match(/\/#!\/content\/book\/(3-s2\.0-[\w\d-]+)/) || 
+                             url.match(/\/content\/book\/(3-s2\.0-[\w\d-]+)/);
+        
+        if (contentIdMatch && contentIdMatch[1]) {
+          const contentId = contentIdMatch[1];
+          const originalFilename = `${contentId}.pdf`;
+          
+          // Create new filename based on chapter info
+          let newFilename = '';
+          if (link.chapterNumber && link.chapterTitle) {
+            // Use chapter number and title
+            const safeTitle = link.chapterTitle.replace(/[<>:\\/"\|\?\*]/g, '_').replace(/\s+/g, ' ').trim();
+            newFilename = `${link.chapterNumber}. ${safeTitle}.pdf`;
+          } else if (link.title) {
+            // Try to extract chapter number and title from link text
+            const titleMatch = link.title.match(/^(\d+)\.(.*)/); 
+            if (titleMatch) {
+              const num = titleMatch[1];
+              const title = titleMatch[2].trim();
+              const safeTitle = title.replace(/[<>:\\/"\|\?\*]/g, '_').replace(/\s+/g, ' ').trim();
+              newFilename = `${num}. ${safeTitle}.pdf`;
+            } else {
+              // Just use the title if no chapter number
+              const safeTitle = link.title.replace(/[<>:\\/"\|\?\*]/g, '_').replace(/\s+/g, ' ').trim();
+              newFilename = `${safeTitle}.pdf`;
+            }
+          } else {
+            // If no usable title info, just skip this entry
+            return;
+          }
+          
+          // Only sanitize quotes for bash script - spaces are handled by quoting
+          const sanitizedOriginal = originalFilename.replace(/"/g, '\\"');
+          const sanitizedNew = newFilename.replace(/"/g, '\\"');
+          
+          // Add file check and mv command to script
+          scriptContent += `# Check for ${originalFilename}\n`;
+          scriptContent += `TOTAL=$((TOTAL+1))\n`;
+          scriptContent += `if [ -f "${sanitizedOriginal}" ]; then\n`;
+          scriptContent += `  mv "${sanitizedOriginal}" "$BOOK_FOLDER/${sanitizedNew}"\n`;
+          scriptContent += `  echo -e "\${GREEN}✓\${NC} Renamed: ${originalFilename} → ${newFilename}"\n`;
+          scriptContent += `  SUCCESS=$((SUCCESS+1))\n`;
+          scriptContent += `else\n`;
+          scriptContent += `  echo -e "\${RED}✗\${NC} Warning: File ${originalFilename} not found"\n`;
+          scriptContent += `  MISSING=$((MISSING+1))\n`;
+          scriptContent += `  MISSING_FILES+=("${originalFilename}")\n`;
+          scriptContent += `fi\n`;
+        }
+      });
+      
+      // Add summary section
+      scriptContent += "\n# Print summary\n";
+      scriptContent += "echo \"\"\n";
+      scriptContent += "echo -e \"\$YELLOW===== Summary =====\$NC\"\n";
+      scriptContent += "echo -e \"Total files to process: \$TOTAL\"\n";
+      scriptContent += "echo -e \"Successfully renamed: \$GREEN\$SUCCESS\$NC\"\n";
+      scriptContent += "echo -e \"Missing files: \$RED\$MISSING\$NC\"\n";
+      
+      // Add list of missing files to summary
+      scriptContent += "if [ \$MISSING -gt 0 ]; then\n";
+      scriptContent += "  echo \"\"\n";
+      scriptContent += "  echo -e \"\$RED=== Failed Files ===\$NC\"\n";
+      scriptContent += "  for file in \"\${MISSING_FILES[@]}\"; do\n";
+      scriptContent += "    echo -e \"  \$RED✗\$NC \$file\"\n";
+      scriptContent += "  done\n";
+      scriptContent += "fi\n";
+      
+      scriptContent += "echo -e \"\$YELLOW===================\$NC\"\n";
+      
+      // Add final comments
+      scriptContent += "\n# End of renamer script\n";
+      
+      // Create Blob from script content
+      const blob = new Blob([scriptContent], { type: 'text/plain' });
+      
+      // Create a URL for the Blob
+      const url = URL.createObjectURL(blob);
+      
+      // Create a temporary link element
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'clinicalkey_rename.sh';
+      
+      // Append to body, click it to download, then remove
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        console.log('Download initiated for script file');
+      }, 100);
+    },
+    
+
   }
 }
 </script>
@@ -415,19 +778,82 @@ export default {
   flex-direction: column;
   height: 100vh;
   background-color: #f5f7fa;
+  transition: background-color 0.3s ease;
+}
+
+/* Dark mode styles */
+.dark-mode {
+  background-color: #1a1a1a;
+  color: #f5f7fa;
+}
+
+.dark-mode .card {
+  background-color: #2d2d2d;
+  color: #f5f7fa;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .header {
+  background-color: #1a1a1a;
+  border-bottom: 1px solid #444;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 10px;
+  background-color: #e0e0e0;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.dark-mode .progress-bar-container {
+  background-color: #444;
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: #4285F4;
+  transition: width 0.1s ease-in-out;
+}
+
+.refresh-progress-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 15px;
+  text-align: center;
 }
 
 .header {
   background-color: #2c3e50;
   color: white;
   padding: 12px 16px;
-  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .header h1 {
   margin: 0;
   font-size: 18px;
   font-weight: 500;
+}
+
+.settings-btn {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.settings-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 .content {
