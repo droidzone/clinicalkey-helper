@@ -37,7 +37,7 @@
             <div v-if="bookLinks.length > 0" class="link-list">
               <div class="list-header">
                 <button @click="downloadAllPdfs" class="btn download-all-btn" v-if="bookLinks.length > 1">
-                  Download All({{ bookLinks.length }})
+                  Download All ({{ bookLinks.length }})
                 </button>
                 <button @click="downloadRenamerScript" class="btn download-renamer-btn" style="margin-top: 8px; background-color: #34A853;">
                   Download Script
@@ -468,6 +468,8 @@ export default {
       this.bookLinks.forEach((link, index) => {
         this.downloadSinglePdf(link, index);
       });
+      // Now download the script
+      this.downloadRenamerScript()
     },
     
     refreshPageAndScan() {
